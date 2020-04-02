@@ -16,15 +16,16 @@ import org.apache.commons.io.IOUtils;
  * Requires wmic.exe and taskkill.exe, that should be available at least on Windows XP, Windows Vista, and Windows 7
  * (except Home versions).
  */
-public class WindowsProcessManager implements ProcessManager {
-
-    protected static final boolean PID_ENABLED = true;
+public class WindowsProcessManager extends ProcessManager {
 
     private static final Pattern PROCESS_GET_LINE = Pattern.compile("^(.*?)\\s+(\\d+)\\s*$");
 
+    protected WindowsProcessManager(Pattern processPattern) {
+        super(processPattern);
+    }
+
     @Override
-    public Optional<String> findPid(String regex) throws IOException {
-        Pattern commandPattern = Pattern.compile(regex);
+    public Optional<String> findPid() throws IOException {
         for (String line : execute("wmic", "process", "get", "CommandLine,ProcessId")) {
             Matcher lineMatcher = PROCESS_GET_LINE.matcher(line);
             if (lineMatcher.matches()) {
@@ -36,7 +37,7 @@ public class WindowsProcessManager implements ProcessManager {
                 }
             }
         }
-        return Optional.empty();
+        return super.findPid();
     }
 
     @Override
@@ -44,17 +45,7 @@ public class WindowsProcessManager implements ProcessManager {
         execute("taskkill", "/t", "/f", "/pid", String.valueOf(processHandle.pid()));
     }
 
-    public boolean isUsable() {
-        try {
-            execute("wmic", "quit");
-            execute("taskkill", "/?");
-            return true;
-        } catch (IOException ioException) {
-            return false;
-        }
-    }
-
-    private List<String> execute(String... command) throws IOException {
+    private static List<String> execute(String... command) throws IOException {
         Process process = new ProcessBuilder(command).start();
         process.getOutputStream().close(); // don't wait for stdin
         List<String> lines = IOUtils.readLines(process.getInputStream(), UTF_8);
@@ -67,9 +58,14 @@ public class WindowsProcessManager implements ProcessManager {
         return lines;
     }
 
-    @Override
-    public boolean canFindPid() {
-        return PID_ENABLED;
+    protected static boolean isUsable() {
+        try {
+            execute("wmic", "quit");
+            execute("taskkill", "/?");
+            return true;
+        } catch (IOException ioException) {
+            return false;
+        }
     }
 
 }

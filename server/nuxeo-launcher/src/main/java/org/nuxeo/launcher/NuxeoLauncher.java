@@ -114,12 +114,7 @@ import org.nuxeo.launcher.info.KeyValueInfo;
 import org.nuxeo.launcher.info.MessageInfo;
 import org.nuxeo.launcher.info.PackageInfo;
 import org.nuxeo.launcher.monitoring.StatusServletClient;
-import org.nuxeo.launcher.process.MacProcessManager;
 import org.nuxeo.launcher.process.ProcessManager;
-import org.nuxeo.launcher.process.PureJavaProcessManager;
-import org.nuxeo.launcher.process.SolarisProcessManager;
-import org.nuxeo.launcher.process.UnixProcessManager;
-import org.nuxeo.launcher.process.WindowsProcessManager;
 import org.nuxeo.log4j.Log4JHelper;
 
 import com.sun.jersey.api.json.JSONConfiguration;
@@ -542,8 +537,6 @@ public class NuxeoLauncher {
 
     protected ProcessManager processManager;
 
-    private String processRegex;
-
     private final ExecutorService executor = Executors.newSingleThreadExecutor(
             new DaemonThreadFactory("NuxeoProcessThread", false));
 
@@ -626,27 +619,12 @@ public class NuxeoLauncher {
         }
         statusServletClient = new StatusServletClient(configurationGenerator);
         statusServletClient.setKey(configurationGenerator.getUserConfig().getProperty(Environment.SERVER_STATUS_KEY));
-        processManager = getOSProcessManager();
-        processRegex = "^(?!/bin/sh).*" + Pattern.quote(configurationGenerator.getNuxeoConf().getPath()) + ".*"
+        String processRegex = "^(?!/bin/sh).*" + Pattern.quote(configurationGenerator.getNuxeoConf().getPath()) + ".*"
                 + Pattern.quote(TomcatConfigurator.STARTUP_CLASS) + ".*$";
+        processManager = ProcessManager.of(processRegex);
         // Set OS-specific decorations
         if (SystemUtils.IS_OS_MAC) {
             System.setProperty("com.apple.mrj.application.apple.menu.about.name", "NuxeoCtl");
-        }
-    }
-
-    private ProcessManager getOSProcessManager() {
-        if (SystemUtils.IS_OS_LINUX || SystemUtils.IS_OS_AIX) {
-            return new UnixProcessManager();
-        } else if (SystemUtils.IS_OS_MAC) {
-            return new MacProcessManager();
-        } else if (SystemUtils.IS_OS_SUN_OS) {
-            return new SolarisProcessManager();
-        } else if (SystemUtils.IS_OS_WINDOWS) {
-            WindowsProcessManager windowsProcessManager = new WindowsProcessManager();
-            return windowsProcessManager.isUsable() ? windowsProcessManager : new PureJavaProcessManager();
-        } else {
-            return new PureJavaProcessManager();
         }
     }
 
@@ -667,7 +645,7 @@ public class NuxeoLauncher {
      */
     public void checkNoRunningServer() throws IllegalStateException {
         try {
-            processManager.findPid(processRegex).ifPresent(pid -> {
+            processManager.findPid().ifPresent(pid -> {
                 errorValue = EXIT_CODE_OK;
                 throw new IllegalStateException("A server is running with process ID " + pid);
             });
@@ -1621,7 +1599,7 @@ public class NuxeoLauncher {
     public boolean doStartAndWait() {
         var nuxeoProcess = doStart(false);
         if (nuxeoProcess.isAlive()) {
-            //noinspection unused
+            // noinspection unused
             try (var hook = new ShutdownHook(this)) { // NOSONAR try-with-resources
                 waitForEffectiveStart(nuxeoProcess);
                 if (!quiet) {
@@ -1749,7 +1727,7 @@ public class NuxeoLauncher {
         } catch (UnsupportedOperationException e) {
             log.warn("Unable to get process ID from process: {}, please report it to Nuxeo", nuxeoProcess);
             // fallback on process manager
-            pid = processManager.findPid(processRegex).orElse(null);
+            pid = processManager.findPid().orElse(null);
         }
         if (pid == null) {
             log.warn("Sent server start command but could not get process ID.");
@@ -1782,8 +1760,7 @@ public class NuxeoLauncher {
                         log.info(".");
                     }
                     break;
-                } else {
-                    statusServletClient.init();
+                } else if (statusServletClient.init()) {
                     servletAvailable = true;
                     n = 0;
                 }
@@ -1939,7 +1916,7 @@ public class NuxeoLauncher {
      */
     public void doStop() {
         try {
-            var nuxeoProcessOpt = processManager.findPid(processRegex).map(Long::valueOf).flatMap(ProcessHandle::of);
+            var nuxeoProcessOpt = processManager.findPid().map(Long::valueOf).flatMap(ProcessHandle::of);
             if (nuxeoProcessOpt.isEmpty()) {
                 log.warn("Server is not running.");
                 return;
@@ -2024,11 +2001,11 @@ public class NuxeoLauncher {
      */
     public String status() {
         try {
-            if (processManager instanceof PureJavaProcessManager) {
+            if (ProcessManager.class.equals(processManager.getClass())) {
                 status = STATUS_CODE_UNKNOWN;
                 return "Can't check server status on your OS.";
             }
-            var pidOpt = processManager.findPid(processRegex);
+            var pidOpt = processManager.findPid();
             if (pidOpt.isEmpty()) {
                 status = STATUS_CODE_OFF;
                 return "Server is not running.";
@@ -2195,7 +2172,7 @@ public class NuxeoLauncher {
      */
     public boolean isRunning() {
         try {
-            return processManager.findPid(processRegex).isPresent();
+            return processManager.findPid().isPresent();
         } catch (IOException e) {
             log.error(e);
             return false;
