@@ -407,6 +407,11 @@ public class ApiBrowser extends DefaultObject {
         return ctx.newObject("documentation");
     }
 
+    @Path("{pluginId}")
+    public Object plugin(@PathParam("pluginId") String pluginId) {
+        return ctx.newObject(pluginId, distributionId, embeddedMode);
+    }
+
     @GET
     @Produces("text/html")
     @Path("service2Bundle/{serviceId}")

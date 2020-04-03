@@ -109,6 +109,7 @@ public class Distribution extends ModuleRoot {
         return Framework.getService(SnapshotManager.class);
     }
 
+    // XXX
     public String getNavigationPoint() {
         String currentUrl = getContext().getURL();
         String navPoint = null;
