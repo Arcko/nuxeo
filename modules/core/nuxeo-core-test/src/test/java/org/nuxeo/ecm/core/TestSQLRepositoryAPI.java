@@ -3821,33 +3821,6 @@ public class TestSQLRepositoryAPI {
         }
     }
 
-    @Test
-    public void testImportDuplicateIdNewSession() {
-        DocumentModel doc = session.createDocumentModel("/", "doc", "File");
-        doc = session.createDocument(doc);
-        session.save();
-        nextTransaction();
-        reopenSession();
-
-        String docId = doc.getId();
-        String rootId = session.getRootDocument().getId();
-
-        // try to import another doc with the same id
-        // this is prevented by a unique index on the id field in the database
-        DocumentModel doc2 = new DocumentModelImpl("File", docId, new Path("/doc2"), null, new IdRef(rootId), null,
-                null, null, false, null, null, null);
-        session.importDocuments(Collections.singletonList(doc2));
-        try {
-            session.save();
-            fail();
-        } catch (ConcurrentUpdateException e) {
-            TransactionHelper.setTransactionRollbackOnly();
-            String message = e.getMessage();
-            assertTrue(message, message.startsWith("Failed to save session"));
-            assertTrue(message, message.endsWith("Concurrent update"));
-        }
-    }
-
     /**
      * Check that lifecycle and dc:issued can be updated on a version. (Fields defined in
      * SQLDocumentLive#VERSION_WRITABLE_PROPS).
@@ -4310,18 +4283,12 @@ public class TestSQLRepositoryAPI {
         TransactionHelper.setTransactionRollbackOnly();
 
         // attempt save in rollback-only state
-        session.save();
-
-        // more changes
-        file.setPropertyValue("dc:title", "gee");
-        session.saveDocument(file);
-        session.save();
-
-        nextTransaction();
-
-        // check what we now have file1 title unchanged
-        file = session.getDocument(file.getRef());
-        assertEquals("foo", file.getPropertyValue("dc:title"));
+        try {
+            session.save();
+            fail("should not allow save when marked rollback-only");
+        } catch (NuxeoException e) {
+            assertEquals("Cannot use a session when transaction is marked rollback-only", e.getMessage());
+        }
     }
 
     @Test
@@ -4366,22 +4333,7 @@ public class TestSQLRepositoryAPI {
             session.getDocument(new PathRef("/"));
             fail("should not allow use of session when marked rollback-only");
         } catch (NuxeoException e) {
-            assertEquals("Cannot reconnect a CoreSession when transaction is marked rollback-only", e.getMessage());
-        }
-    }
-
-    @Test
-    public void testRollback5() {
-        TransactionHelper.commitOrRollbackTransaction();
-        TransactionHelper.startTransaction();
-        // set rollback-only
-        TransactionHelper.setTransactionRollbackOnly();
-        // then create a session
-        try {
-            CoreSession session2 = CoreInstance.getCoreSession(coreFeature.getRepositoryName());
-            fail("should not allow creation of session when marked rollback-only");
-        } catch (NuxeoException e) {
-            assertEquals("Cannot create a CoreSession when transaction is marked rollback-only", e.getMessage());
+            assertEquals("Cannot use a session when transaction is marked rollback-only", e.getMessage());
         }
     }
 
