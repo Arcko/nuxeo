@@ -244,6 +244,43 @@ public class TestColdStorage {
         checkAvailabilityOfDocuments(Arrays.asList(documents.get(1), documents.get(2)), downloadableUntil, 0);
     }
 
+    @Test
+    public void shouldFailUpdateMainContentAlreadyInColdStorage() throws IOException {
+        // move the main content into the cold storage
+        DocumentModel documentModel = createFileDocument(DEFAULT_DOC_NAME, true);
+        moveAndVerifyContent(session, documentModel);
+
+        // we cannot update the main content as it is already in cold storage
+        documentModel = session.getDocument(documentModel.getRef());
+        documentModel.setPropertyValue(ColdStorageHelper.FILE_CONTENT_PROPERTY,
+                (Serializable) Blobs.createBlob(FILE_CONTENT));
+        try {
+            session.saveDocument(documentModel);
+            fail("Should fail because a main content document in cold storage cannot be updated.");
+        } catch (NuxeoException e) {
+            assertEquals(SC_FORBIDDEN, e.getStatusCode());
+            assertEquals(
+                    String.format("The main content of document: %s cannot be updated. It's already in cold storage.",
+                            documentModel.getId()),
+                    e.getMessage());
+        }
+
+        // but we should be able to update the others properties even the attachments
+        documentModel = session.getDocument(documentModel.getRef());
+        documentModel.setPropertyValue("dc:title", "I update the title");
+        documentModel.setPropertyValue("dc:description", "I add a description");
+        var attachments = List.of(Map.of("file", Blobs.createBlob("bar", "text/plain")));
+        documentModel.setPropertyValue("files:files", (Serializable) attachments);
+
+        documentModel = session.saveDocument(documentModel);
+        assertEquals("I update the title", documentModel.getPropertyValue("dc:title"));
+        assertEquals("I add a description", documentModel.getPropertyValue("dc:description"));
+        attachments = (List<Map<String, Blob>>) documentModel.getPropertyValue("files:files");
+        assertEquals(1, attachments.size());
+        assertNotNull(attachments.get(0).get("file"));
+        assertEquals("bar", attachments.get(0).get("file").getString());
+    }
+
     protected void moveAndVerifyContent(CoreSession session, DocumentModel documentModel) throws IOException {
         documentModel = ColdStorageHelper.moveContentToColdStorage(session, documentModel.getRef());
         session.saveDocument(documentModel);
