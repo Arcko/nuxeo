@@ -172,11 +172,11 @@ def buildUnitTestStage(env) {
               helm repo add ${HELM_CHART_REPOSITORY_NAME} ${HELM_CHART_REPOSITORY_URL}
             """
             // prepare values to disable nuxeo and activate external services in the nuxeo Helm chart
-            sh 'envsubst < ci/helm/nuxeo-test-base-values.yaml > nuxeo-test-base-values.yaml'
-            def testValues = '--set-file=nuxeo-test-base-values.yaml'
+            sh 'envsubst < ci/helm/nuxeo-test-base-values.yaml > nuxeo-test-base-values.yaml~gen'
+            def testValues = '--set-file=nuxeo-test-base-values.yaml~gen'
             if (!isDev) {
-              sh "envsubst < ci/helm/nuxeo-test-${env}-values.yaml > nuxeo-test-${env}-values.yaml"
-              testValues += " --set-file=nuxeo-test-${env}-values.yaml"
+              sh "envsubst < ci/helm/nuxeo-test-${env}-values.yaml > nuxeo-test-${env}-values.yaml~gen"
+              testValues += " --set-file=nuxeo-test-${env}-values.yaml~gen"
             }
             // install the nuxeo Helm chart into a dedicated namespace that will be cleaned up afterwards
             sh """
@@ -210,8 +210,11 @@ def buildUnitTestStage(env) {
             echo "${env} unit tests: run Maven"
             // prepare test framework system properties
             sh """
+              cat ci/mvn/nuxeo-test-${env}.properties \
+                ci/mvn/elasticsearch.properties \
+                > nuxeo-test-${env}.properties~gen
               CHART_RELEASE=${TEST_HELM_CHART_RELEASE} SERVICE=${env} NAMESPACE=${testNamespace} DOMAIN=${TEST_SERVICE_DOMAIN_SUFFIX} \
-                envsubst < ci/mvn/nuxeo-test-${env}.properties > ${HOME}/nuxeo-test-${env}.properties
+                envsubst < nuxeo-test-${env}.properties~gen > ${HOME}/nuxeo-test-${env}.properties
             """
             // run unit tests:
             // - in modules/core and dependent projects only (modules/runtime is run in dedicated stage)
