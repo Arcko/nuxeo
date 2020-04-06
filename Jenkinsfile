@@ -212,6 +212,7 @@ def buildUnitTestStage(env) {
             sh """
               cat ci/mvn/nuxeo-test-${env}.properties \
                 ci/mvn/elasticsearch.properties \
+                ci/mvn/kafka.properties \
                 > nuxeo-test-${env}.properties~gen
               CHART_RELEASE=${TEST_HELM_CHART_RELEASE} SERVICE=${env} NAMESPACE=${testNamespace} DOMAIN=${TEST_SERVICE_DOMAIN_SUFFIX} \
                 envsubst < nuxeo-test-${env}.properties~gen > ${HOME}/nuxeo-test-${env}.properties
