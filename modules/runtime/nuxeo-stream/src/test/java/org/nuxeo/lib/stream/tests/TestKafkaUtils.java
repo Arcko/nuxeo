@@ -41,7 +41,7 @@ public class TestKafkaUtils {
 
     @BeforeClass
     public static void assumeKafkaEnabled() {
-        if ("true".equals(System.getProperty("kafka"))) {
+        if ("true".equals(System.getProperty("kafka")) || "kafka".equals(System.getProperty("nuxeo.test.stream"))) {
             if (!KafkaUtils.kafkaDetected()) {
                 fail("Kafka profile is enable, no broker found: " + KafkaUtils.getBootstrapServers());
             }
